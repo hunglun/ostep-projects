@@ -1,5 +1,5 @@
 #!/bin/bash
-sleep 3
+sleep 1
 cd tests/p2a-test
 ls test2
 

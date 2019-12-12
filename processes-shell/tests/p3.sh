@@ -1,4 +1,4 @@
 #!/bin/bash
-sleep 4
+sleep 2
 echo Linux
 
