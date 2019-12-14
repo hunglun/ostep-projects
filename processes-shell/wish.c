@@ -7,7 +7,6 @@
  * script, redirection and parallel execution. Requirement is described in
  * github.com/remzi-arpacidusseau/ostep-projects/tree/master/processes-shell
  * 
- * 
  */
 /* Standard headers */
 #include <sys/wait.h> /* wait */
@@ -30,7 +29,6 @@ int convert_whitespc_delimited_string_to_array(char ***args, char * str);
 int redirect_stdout_to_valid_file(char ** line);
 int execute_processes_in_parallel(char ** line);
 int get_path_for_basename(char ** path, char * basename);
-int is_shell_script(char * basename);
 void execute_command_after_fork(char * line);
 void print_error_msg(void);
 int is_builtin_cmd(char * line);
@@ -47,38 +45,17 @@ int exit_shell(char * line); /* built_in commands */
  */
 int get_path_for_basename(char **path, char * basename){
   int i=0;
-  char candidate[MAX_PATH_LENGTH]; /*  max path length is 255 in most file system. */
-                                                                              
   while(g_paths[i]!=NULL){
     /*  control copy size.  2 is for "/" and null terminator. */
-    strncpy(candidate, g_paths[i], MAX_PATH_LENGTH - strlen(basename) - 2); 
-    (void)strcat(candidate, "/"); 
-    (void)strcat(candidate, basename); 
-    if (access(candidate, X_OK) == 0){
-      strcpy(*path, candidate);
+    strncpy(*path, g_paths[i], MAX_PATH_LENGTH - strlen(basename) - 2); 
+    (void)strcat(*path, "/"); 
+    (void)strcat(*path, basename); 
+    if (access(*path, X_OK) == 0){
       return 0; /*  found! */
     }
     i++;
   }  
   return -1;
-}
-/** 
- * is_shell_script determine if basename is a script.
- * 
- * @param basename of script requires at least 4 characters.
- * 
- * @return 0 if basename is of the form x.sh, otherwise -1.
- */
-int is_shell_script(char * basename){
-  int len = strlen(basename);
-  if (len > 3){
-    return (basename[len-3] == '.' &&
-	    basename[len-2] == 's' &&
-	    basename[len-1] == 'h')? 0 : -1;
-  }
-  else{
-    return -1; /*  x.sh has 4 characters or more. */
-  }
 }
 /** 
  * Convert str to array of string separated by " "
@@ -116,19 +93,11 @@ void execute_command_after_fork(char * line){
   char **myargs;
   int i =  convert_whitespc_delimited_string_to_array(&myargs, line);
   myargs[i] = NULL; /* execv expects myargs array to end with NULL. */
-  /*  fork and execute */
-  char * found_path = malloc(MAX_PATH_LENGTH); 
+  char * found_path = malloc(MAX_PATH_LENGTH);  /* it will not be freed. */
   int found = get_path_for_basename(&found_path, myargs[0]);
-  char * argv[2] = {"",found_path};
-  if (is_shell_script(myargs[0]) == 0 && found == 0){ 
-    main(2,argv); /*  TODO free found_path? */
-  } /*  found a shell script */
-  else{
-    (void) execv(found_path, myargs); /*  line is program arguments */
-  } /* system commands */
+  (void) execv(found_path, myargs); /*  line is program arguments */
   print_error_msg();    
-  exit(0);
-  
+  exit(0);  
 }
 /** 
  * print_error_msg
