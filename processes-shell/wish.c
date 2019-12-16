@@ -21,11 +21,12 @@
 #define SEARCH_PATH_SIZE 100
 #define MAX_PATH_LENGTH 255
 #define MAX_PROCESS_CNT 255
+#define MAX_CMD_ARG_LEN 10
 /* Global variables */
 char *g_paths[SEARCH_PATH_SIZE];
 /* Function prototypes */
 int main(int argc, char *argv[]);
-int convert_whitespc_delimited_string_to_array(char ***args, char * str);
+int convert_whitespc_delimited_string_to_array(char ***args, char * str, int n);
 int redirect_stdout_to_valid_file(char ** line);
 int execute_processes_in_parallel(char ** line);
 int get_path_for_basename(char ** path, char * basename);
@@ -62,25 +63,18 @@ int get_path_for_basename(char **path, char * basename){
  * 
  * @param args : args is allocated memory in this function.
  * @param str
+ * @param n : size of array args
  *
  * @return size of args
  */
-int convert_whitespc_delimited_string_to_array(char ***args, char * str){
+int convert_whitespc_delimited_string_to_array(char ***args, char * str, int n){
   char * line = strdup(str);
-  int n = 1;
-  //  for(int i = 0; i < strlen(str); i++) n = n + (str[i] == ' ');  
-  *args =  malloc(sizeof(char *) * 10); // TODO replace 10 with n fail test 10.
-  char **myargs = *args;
-  int i = 0;
-  /*  parse line into myargs array. */
-  while(line!=NULL){
-    myargs[i] = strsep(&line, " ");
+  int i = 0;  
+  *args =  malloc(sizeof(char *) * n); 
+  while(line!=NULL && i < n){
+    (*args)[i] = strsep(&line, " ");
     i++;
-    if(i>9){
-      print_error_msg();
-      exit(0);
-    }
-  }
+  }   /*  parse line into myargs array. */
   return i;
 }
 /** 
@@ -91,7 +85,7 @@ int convert_whitespc_delimited_string_to_array(char ***args, char * str){
  */
 void execute_command_after_fork(char * line){
   char **myargs;
-  int i =  convert_whitespc_delimited_string_to_array(&myargs, line);
+  int i =  convert_whitespc_delimited_string_to_array(&myargs, line, MAX_CMD_ARG_LEN);
   myargs[i] = NULL; /* execv expects myargs array to end with NULL. */
   char * found_path = malloc(MAX_PATH_LENGTH);  /* it will not be freed. */
   int found = get_path_for_basename(&found_path, myargs[0]);
