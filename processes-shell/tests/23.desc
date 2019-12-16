@@ -1,0 +1,1 @@
+Test to check that built-in command path does not affect the path environment used by /bin/bash, which is called by execv to run the script.
