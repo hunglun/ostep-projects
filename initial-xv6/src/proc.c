@@ -6,6 +6,8 @@
 #include "x86.h"
 #include "proc.h"
 #include "spinlock.h"
+#include "rand.h" // rand
+#include "pstat.h"
 
 struct {
   struct spinlock lock;
@@ -13,8 +15,9 @@ struct {
 } ptable;
 
 static struct proc *initproc;
-
 int nextpid = 1;
+int no_lottery_count = 0;
+int lottery_count = 0;
 extern void forkret(void);
 extern void trapret(void);
 
@@ -126,6 +129,8 @@ userinit(void)
   p = allocproc();
   
   initproc = p;
+  initproc->tickets = 1;
+  initproc->ticks = 0;
   if((p->pgdir = setupkvm()) == 0)
     panic("userinit: out of memory?");
   inituvm(p->pgdir, _binary_initcode_start, (int)_binary_initcode_size);
@@ -197,6 +202,8 @@ fork(void)
     return -1;
   }
   np->sz = curproc->sz;
+  np->tickets = curproc->tickets;
+  np->ticks = 0;
   np->parent = curproc;
   *np->tf = *curproc->tf;
 
@@ -324,18 +331,34 @@ scheduler(void)
 {
   struct proc *p;
   struct cpu *c = mycpu();
+  int counter = 0; // track if we've found the winner yet.
   c->proc = 0;
-  
+
   for(;;){
     // Enable interrupts on this processor.
     sti();
 
     // Loop over process table looking for process to run.
     acquire(&ptable.lock);
+    int total_tickets = 0;
+    int winner = 0;
     for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
+      total_tickets += p->tickets;
+    }
+    if (total_tickets > 0){
+      winner = rand(total_tickets);
+      lottery_count += 1;
+    }else{
+      no_lottery_count += 1;
+    }
+    for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
+      counter = counter + p->tickets;
+      if(counter <= winner)
+        continue; // skip the loser
+      counter = 0; // reset count
+      p->ticks +=1;
       if(p->state != RUNNABLE)
         continue;
-
       // Switch to chosen process.  It is the process's job
       // to release ptable.lock and then reacquire it
       // before jumping back to us.
@@ -349,6 +372,7 @@ scheduler(void)
       // Process is done running for now.
       // It should have changed its p->state before coming back.
       c->proc = 0;
+      break; // run just one process for each lottery.
     }
     release(&ptable.lock);
 
@@ -523,7 +547,7 @@ procdump(void)
       state = states[p->state];
     else
       state = "???";
-    cprintf("%d %s %s", p->pid, state, p->name);
+    cprintf("%d %d %d %s %s", p->pid, p->tickets, p->ticks, state, p->name);
     if(p->state == SLEEPING){
       getcallerpcs((uint*)p->context->ebp+2, pc);
       for(i=0; i<10 && pc[i] != 0; i++)
@@ -531,4 +555,49 @@ procdump(void)
     }
     cprintf("\n");
   }
+  cprintf("lottery count: %d\n", lottery_count);
+  cprintf("no lottery count: %d\n", no_lottery_count);
+}
+
+// set the tickets held by current process
+int
+sys_settickets()
+{
+  int n;
+  if(argint(0, &n) < 0) return -1;
+
+  if (n < 1) return -1;
+
+  struct proc *curproc = myproc();
+ 
+  curproc->tickets = n;
+
+  return 0;
+}  
+
+// get all process info
+int
+sys_getpinfo()
+{
+  char * p;
+  if(argptr(0, &p, sizeof(struct pstat)) < 0)
+    return -1;
+  struct pstat * s = (struct pstat *)p;
+
+  for(int i=0; i<NPROC; i++){
+    s->inuse[i] = 0;
+    s->tickets[i] = 0;
+    s->ticks[i] = 0;
+    s->pid[i] = 0;
+  }
+  int i=0;
+  for(struct proc * p = ptable.proc; p < &ptable.proc[NPROC]; p++){
+    s->inuse[i] = (p->state == RUNNING);
+    s->tickets[i] = p->tickets;
+    s->ticks[i] = p->ticks;
+    s->pid[i] = p->pid;
+
+    i++;
+  }
+  return 0;
 }

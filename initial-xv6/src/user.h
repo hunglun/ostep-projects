@@ -1,3 +1,4 @@
+#include "pstat.h" // pstat
 struct stat;
 struct rtcdate;
 
@@ -24,6 +25,8 @@ char* sbrk(int);
 int sleep(int);
 int uptime(void);
 int getreadcount(void);
+int settickets(int number);
+int getpinfo(struct pstat *);
 
 // ulib.c
 int stat(const char*, struct stat*);
